@@ -19,7 +19,9 @@ resource "aws_iam_role" "grafana_execution_role" {
   ]
 }
 EOF
-
+  tags = {
+    Environment = "Production"
+  }
 }
 resource "aws_iam_role" "grafana_task_role" {
   name = "grafana_task_role"
@@ -39,7 +41,9 @@ resource "aws_iam_role" "grafana_task_role" {
   ]
 }
 EOF
-
+  tags = {
+    Environment = "Production"
+  }
 }
 data "aws_iam_policy_document" "grafana_execution" {
   statement {
@@ -78,7 +82,10 @@ data "aws_iam_policy_document" "grafana_task" {
         "logs:*",
         "tag:*",
         "resource-groups:*",
-        "elasticfilesystem:*"
+        "elasticfilesystem:*",
+        "cloudwatch:List*",
+        "cloudwatch:Describe*",
+        "cloudwatch:Get*",
     ]
 
     resources = [

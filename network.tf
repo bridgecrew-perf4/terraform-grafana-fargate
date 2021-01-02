@@ -1,12 +1,28 @@
+# ------------------------------------------------
+# General collection of resources for data traffic
+# ------------------------------------------------
+
+# -- Data Objects --
 data "aws_availability_zones" "available" {
 }
+data "aws_route53_zone" "primary" {
+  name         = var.route_53_zone
+  private_zone = false
+}
+data "aws_acm_certificate" "grafana" {
+  domain      = var.certificate_domain
+  types       = ["AMAZON_ISSUED"]
+  most_recent = true
+}
+data "aws_route_table" "main" {
+  vpc_id = aws_vpc.fargate.id
+}
 
+# -- Resources --
 resource "aws_vpc" "fargate" {
   cidr_block = "10.0.0.0/16"
   enable_dns_hostnames = true
-  tags = {
-    Name = "Fargate"
-  }
+  tags = { Name = "Fargate" }
 }
 
 resource "aws_internet_gateway" "gw" {
@@ -67,11 +83,6 @@ resource "aws_lb_listener" "grafana443" {
     type             = "forward"
   }
 }
-data "aws_acm_certificate" "grafana" {
-  domain      = var.certificate_domain
-  types       = ["AMAZON_ISSUED"]
-  most_recent = true
-}
 
 resource "aws_lb_listener" "grafana80" {
   load_balancer_arn = aws_lb.grafana.id
@@ -88,10 +99,6 @@ resource "aws_lb_listener" "grafana80" {
   }
 }
 
-data "aws_route53_zone" "primary" {
-  name         = var.route_53_zone
-  private_zone = false
-}
 resource "aws_route53_record" "grafana" {
   zone_id = data.aws_route53_zone.primary.zone_id
   name    = var.certificate_domain
@@ -103,6 +110,7 @@ resource "aws_route53_record" "grafana" {
     evaluate_target_health = false
   }
 }
+
 resource "aws_security_group" "grafana" {
   name        = "grafana"
   description = "Allow inbound traffic"
@@ -124,10 +132,9 @@ resource "aws_security_group" "grafana" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "Grafana"
-  }
+  tags = { Name = "Grafana" }
 }
+
 resource "aws_security_group" "grafana_service" {
   name        = "grafana_service"
   description = "Allow inbound traffic"
@@ -138,14 +145,14 @@ resource "aws_security_group" "grafana_service" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["71.227.198.217/32"]
+    cidr_blocks = [var.allowed_public_cidr]
   }
   ingress {
     description = "TLS Access"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["71.227.198.217/32"]
+    cidr_blocks = [var.allowed_public_cidr]
   }
   egress {
     from_port   = 0
@@ -158,6 +165,7 @@ resource "aws_security_group" "grafana_service" {
     Name = "Grafana-Service"
   }
 }
+
 resource "aws_security_group" "endpoints" {
   name        = "vpc-endpoints"
   description = "Allow service traffic to endpoints"
@@ -194,9 +202,7 @@ resource "aws_security_group" "endpoints" {
     Name = "vpc-endpoints"
   }
 }
-data "aws_route_table" "main" {
-  vpc_id = aws_vpc.fargate.id
-}
+
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.fargate.id
   service_name      = "com.amazonaws.${var.aws_region}.s3"
@@ -208,34 +214,69 @@ resource "aws_vpc_endpoint" "s3" {
     Environment = "Production"
   }
 }
+
 resource "aws_vpc_endpoint" "ecr-dkr" {
   vpc_id       = aws_vpc.fargate.id
-  service_name = "com.amazonaws.us-east-1.ecr.dkr"
+  service_name = "com.amazonaws.${var.aws_region}.ecr.dkr"
   vpc_endpoint_type = "Interface"
   security_group_ids = [ aws_security_group.endpoints.id ]
   subnet_ids = aws_subnet.public.*.id
   private_dns_enabled = true
+  tags = {
+    Name        = "ecr-dkr-endpoint"
+    Environment = "Production"
+  }
 }
+
 resource "aws_vpc_endpoint" "ecr-api" {
   vpc_id       = aws_vpc.fargate.id
-  service_name = "com.amazonaws.us-east-1.ecr.api"
+  service_name = "com.amazonaws.${var.aws_region}.ecr.api"
   vpc_endpoint_type = "Interface"
   security_group_ids = [ aws_security_group.endpoints.id ]
   subnet_ids = aws_subnet.public.*.id
   private_dns_enabled = true
+  tags = {
+    Name        = "ecr-api-endpoint"
+    Environment = "Production"
+  }
 }
+
+resource "aws_vpc_endpoint" "efs" {
+  vpc_id              = aws_vpc.fargate.id
+  private_dns_enabled = true
+  service_name        = "com.amazonaws.${var.aws_region}.elasticfilesystem"
+  vpc_endpoint_type   = "Interface"
+  security_group_ids = [aws_security_group.endpoints.id]
+  subnet_ids = aws_subnet.public.*.id
+  tags = {
+    Name        = "efs-endpoint"
+    Environment = "Production"
+  }
+}
+
 resource "aws_vpc_endpoint" "logs" {
   vpc_id              = aws_vpc.fargate.id
   private_dns_enabled = true
   service_name        = "com.amazonaws.${var.aws_region}.logs"
   vpc_endpoint_type   = "Interface"
-  security_group_ids = [
-    aws_security_group.endpoints.id,
-  ]
+  security_group_ids = [aws_security_group.endpoints.id]
   subnet_ids = aws_subnet.public.*.id
 
   tags = {
     Name        = "logs-endpoint"
+    Environment = "Production"
+  }
+}
+
+resource "aws_vpc_endpoint" "cw" {
+  vpc_id              = aws_vpc.fargate.id
+  private_dns_enabled = true
+  service_name        = "com.amazonaws.${var.aws_region}.monitoring"
+  vpc_endpoint_type   = "Interface"
+  security_group_ids = [aws_security_group.endpoints.id]
+  subnet_ids = aws_subnet.public.*.id
+  tags = {
+    Name        = "cw-endpoint"
     Environment = "Production"
   }
 }

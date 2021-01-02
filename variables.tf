@@ -30,3 +30,10 @@ variable "route_53_zone" {
   description = "The DNS zone to place our host record"
   type = string
 }
+variable "allowed_public_cidr" {
+  description = "The Network cidr range allowed to access Grafana"
+  default = "0.0.0.0/0"
+}
+variable "default_tags" {
+  default = {}
+}

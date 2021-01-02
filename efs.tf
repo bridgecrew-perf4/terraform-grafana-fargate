@@ -26,5 +26,10 @@ resource "aws_efs_access_point" "grafana" {
   posix_user {
       uid = 472
       gid = 1
+  }
+
+  tags = {
+      Name        = "Grafana-varlib"
+      Environment = "Production"
   }   
 }

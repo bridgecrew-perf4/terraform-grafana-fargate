@@ -1,5 +1,10 @@
+# -------------------------------------------------------------
+# A collection of resources to running the ECS Fargate solution
+# -------------------------------------------------------------
+
 
 locals {
+  # -- ECS container definition will be jsonencoded in the task resource
   grafana_container_def = [
     {
       name = "grafana"
@@ -36,8 +41,13 @@ locals {
     }
   ]
 }
+
+# -- Resources --
 resource "aws_ecs_cluster" "fargate" {
   name = local.cluster_name
+  tags = {
+    Name = "Fargate"
+  }
 }
 
 resource "aws_ecs_task_definition" "grafana" {
@@ -71,7 +81,6 @@ resource "aws_ecs_service" "grafana" {
   task_definition = aws_ecs_task_definition.grafana.arn
   platform_version = "1.4.0"
   desired_count   = 1
-#   iam_role        = aws_iam_role.grafana_role.arn
   launch_type = "FARGATE"
   depends_on      = [aws_iam_role.grafana_execution_role]
 
