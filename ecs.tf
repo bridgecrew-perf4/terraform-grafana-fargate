@@ -28,10 +28,6 @@ locals {
         }
       ]
       environment = [
-        # {
-        #   name  = "GF_PATHS_CONFIG"
-        #   value = "/var/lib/grafana/grafana.ini"
-        # },
         {
           name  = "GF_PATHS_PROVISIONING"
           value = "/var/lib/grafana/provisioning"
@@ -43,18 +39,7 @@ locals {
 resource "aws_ecs_cluster" "fargate" {
   name = local.cluster_name
 }
-# data "template_file" "grafana" {
-#   template = file("./task-definitions/grafana.json.tpl")
 
-#   vars = {
-#     tag                 = "latest"
-#     cpu                 = var.fargate_cpu
-#     memory              = var.fargate_memory
-#     aws_region          = var.aws_region
-#     aws_ecr_repository  = var.aws_ecr_repository
-#     cloudwatch_log_group = aws_cloudwatch_log_group.grafana.name
-#   }
-# }
 resource "aws_ecs_task_definition" "grafana" {
   family                = "grafana"
   execution_role_arn    = aws_iam_role.grafana_execution_role.arn
@@ -78,12 +63,6 @@ resource "aws_ecs_task_definition" "grafana" {
 
   cpu                      = 1024
   memory                   = 2048
-
-#   volume {
-#     name      = "service-storage"
-#     host_path = "/ecs/service-storage"
-#   }
-
 }
 
 resource "aws_ecs_service" "grafana" {
@@ -106,5 +85,4 @@ resource "aws_ecs_service" "grafana" {
     assign_public_ip = false
     security_groups = [aws_security_group.grafana.id]
   }
-
 }
