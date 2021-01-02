@@ -1,27 +1,80 @@
 
-
+locals {
+  grafana_container_def = [
+    {
+      name = "grafana"
+      image = var.aws_ecr_repository
+      networkMode = "awsvpc"
+      cpu = var.fargate_cpu
+      memory = var.fargate_memory
+      portMappings = [
+        {
+          containerPort = 3000
+          hostPort = 3000
+        }
+      ],
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group = aws_cloudwatch_log_group.grafana.name
+          awslogs-stream-prefix = "containers",
+          awslogs-region = "us-east-1"
+        }
+      }
+      mountPoints = [
+        {
+          containerPath = "/var/lib/grafana"
+          sourceVolume  = "grafana"
+        }
+      ]
+      environment = [
+        # {
+        #   name  = "GF_PATHS_CONFIG"
+        #   value = "/var/lib/grafana/grafana.ini"
+        # },
+        {
+          name  = "GF_PATHS_PROVISIONING"
+          value = "/var/lib/grafana/provisioning"
+        }
+      ]
+    }
+  ]
+}
 resource "aws_ecs_cluster" "fargate" {
   name = local.cluster_name
 }
+# data "template_file" "grafana" {
+#   template = file("./task-definitions/grafana.json.tpl")
 
-data "template_file" "grafana" {
-  template = file("./task-definitions/grafana.json.tpl")
-
-  vars = {
-    tag                 = "latest"
-    cpu                 = var.fargate_cpu
-    memory              = var.fargate_memory
-    aws_region          = var.aws_region
-    aws_ecr_repository  = var.aws_ecr_repository
-    cloudwatch_log_group = aws_cloudwatch_log_group.grafana.name
-  }
-}
+#   vars = {
+#     tag                 = "latest"
+#     cpu                 = var.fargate_cpu
+#     memory              = var.fargate_memory
+#     aws_region          = var.aws_region
+#     aws_ecr_repository  = var.aws_ecr_repository
+#     cloudwatch_log_group = aws_cloudwatch_log_group.grafana.name
+#   }
+# }
 resource "aws_ecs_task_definition" "grafana" {
   family                = "grafana"
-  execution_role_arn    = aws_iam_role.grafana_role.arn
-  container_definitions = data.template_file.grafana.rendered
-  network_mode             = "awsvpc"
-  requires_compatibilities = [ "FARGATE" ]
+  execution_role_arn    = aws_iam_role.grafana_execution_role.arn
+  container_definitions = jsonencode(local.grafana_container_def)
+  network_mode              = "awsvpc"
+  requires_compatibilities  = [ "FARGATE" ]
+  task_role_arn             = aws_iam_role.grafana_task_role.arn
+
+  volume {
+    name  = "grafana"
+    efs_volume_configuration {
+      file_system_id      = aws_efs_file_system.grafana.id
+      root_directory      = "/grafana"
+      transit_encryption  = "ENABLED"
+      authorization_config {
+        access_point_id = aws_efs_access_point.grafana.id
+      }
+
+    }
+  }
 
   cpu                      = 1024
   memory                   = 2048
@@ -37,10 +90,11 @@ resource "aws_ecs_service" "grafana" {
   name            = "grafana"
   cluster         = aws_ecs_cluster.fargate.id
   task_definition = aws_ecs_task_definition.grafana.arn
+  platform_version = "1.4.0"
   desired_count   = 1
 #   iam_role        = aws_iam_role.grafana_role.arn
   launch_type = "FARGATE"
-  depends_on      = [aws_iam_role.grafana_role]
+  depends_on      = [aws_iam_role.grafana_execution_role]
 
   load_balancer {
     target_group_arn = aws_lb_target_group.grafana.arn

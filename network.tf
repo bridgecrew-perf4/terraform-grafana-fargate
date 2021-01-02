@@ -168,9 +168,21 @@ resource "aws_security_group" "endpoints" {
     from_port   = 0
     to_port     = 65500
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.fargate.cidr_block]
+    security_groups = [
+      aws_security_group.grafana_service.id,
+      aws_security_group.grafana.id
+      ]
   }
-
+  ingress {
+    description = "NFS Access"
+    from_port   = 2049
+    to_port     = 2049
+    protocol    = "tcp"
+    security_groups = [
+      aws_security_group.grafana_service.id,
+      aws_security_group.grafana.id
+      ]
+  }
   egress {
     from_port   = 0
     to_port     = 0
